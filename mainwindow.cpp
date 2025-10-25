@@ -8,11 +8,100 @@
 #include <QTimer>
 #include <QKeyEvent>
 #include <QSettings>
+#include <QList>
+#include <QVariant>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow) {
     ui->setupUi(this);
+
+    this->setStyleSheet(R"(
+QWidget {
+  background-color: #0F0F14;
+  color: #EAEAF0;
+  font-family: "Inter", "Segoe UI", sans-serif;
+  font-size: 18px;
+}
+
+QLabel#LevelTitle {
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+QLineEdit#EquationField {
+  background: #17171F;
+  border: 2px solid #1F1F2A;
+  border-radius: 16px;
+  padding: 14px 20px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 24px;
+  selection-background-color: #8B5CF6;
+  selection-color: #0F0F14;
+}
+QLineEdit#EquationField:focus {
+  border-color: #8B5CF6;
+  box-shadow: 0 0 0 4px rgba(139,92,246,0.25);
+}
+
+QPushButton[class~="Pad"] {
+  background: #17171F;
+  border: 1px solid #262636;
+  border-radius: 16px;
+  padding: 14px;
+  min-width: 84px;
+  min-height: 72px;
+  transition: all 120ms ease;
+}
+QPushButton[class~="Pad"]:hover {
+  border-color: #3B3B55;
+}
+QPushButton[class~="Pad"]:pressed {
+  background: #13131A;
+  transform: translateY(1px);
+}
+
+QPushButton[class~="PadAccent"] {
+  border-color: rgba(139,92,246,0.6);
+  color: #EAEAF0;
+}
+
+QPushButton#CheckBtn {
+  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+    stop:0 #8B5CF6, stop:1 #EC4899);
+  border: none;
+  border-radius: 20px;
+  padding: 18px 28px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+QPushButton#CheckBtn:hover {
+  filter: brightness(1.05);
+}
+QPushButton#CheckBtn:pressed {
+  filter: brightness(0.95);
+}
+
+QPushButton#Restart, QPushButton#RestartThis {
+  background: #17171F;
+  border: 1px solid #262636;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+QPushButton#Restart:hover, QPushButton#RestartThis:hover {
+  border-color: #8B5CF6;
+}
+
+QStatusBar {
+  background: #17171F;
+  color: #A3A3B0;
+  border-top: 1px solid #262636;
+  font-size: 16px;
+  padding: 6px 12px;
+}
+)");
 
     QSettings settings("Kacherga", "FourFoursGame");
     target = settings.value("target", 1).toInt(); // если нет сохранения, по умолчанию 9
@@ -20,7 +109,7 @@ MainWindow::MainWindow(QWidget *parent)
     cursorPos = expr.length();
     updateUI();
 
-    ui->lineEditExpr->installEventFilter(this);
+    ui->EquationField->installEventFilter(this);
     keyToButton[Qt::Key_Plus]      = ui->btnPlus;
     keyToButton[Qt::Key_Minus]     = ui->btnMinus;
     keyToButton[Qt::Key_Asterisk]  = ui->btnMul;
@@ -37,8 +126,8 @@ MainWindow::MainWindow(QWidget *parent)
     keyToButton[Qt::Key_F]         = ui->btnSUBFAC;
     keyToButton[Qt::Key_G]         = ui->btnSCOB2;
 
-    keyToButton[Qt::Key_Enter]     = ui->btnCheck;
-    keyToButton[Qt::Key_Return]    = ui->btnCheck;
+    keyToButton[Qt::Key_Enter]     = ui->CheckBtn;
+    keyToButton[Qt::Key_Return]    = ui->CheckBtn;
 
     keyToButton[Qt::Key_Backspace] = ui->btnBack;
 
@@ -48,7 +137,7 @@ MainWindow::MainWindow(QWidget *parent)
         backsp(); // функция удаления символа
     });
 
-    ui->lineEditExpr->installEventFilter(this);
+    ui->EquationField->installEventFilter(this);
 
     // === Инициализация ---
     expr = QString("4_4_4_4=%1").arg(target);
@@ -73,19 +162,37 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->btnSCOB2, &QPushButton::clicked, this, [=](){ addBracket(')'); });
 
     connect(ui->btnBack, &QPushButton::clicked, this, [=](){ backsp(); });
-    connect(ui->btnREPALL, &QPushButton::clicked, this, [=](){ replace(1); });
-    connect(ui->btnREPTHIS, &QPushButton::clicked, this, [=](){ replace(2); });
+    connect(ui->Restart, &QPushButton::clicked, this, [=](){ replace(1); });
+    connect(ui->RestartThis, &QPushButton::clicked, this, [=](){ replace(2); });
 
     // Проверка результата
-    connect(ui->btnCheck, &QPushButton::clicked, this, &MainWindow::checkResult);
+    connect(ui->CheckBtn, &QPushButton::clicked, this, &MainWindow::checkResult);
 
     // Отслеживание позиции курсора
-    connect(ui->lineEditExpr, &QLineEdit::cursorPositionChanged, this,
+    connect(ui->EquationField, &QLineEdit::cursorPositionChanged, this,
             [=](int oldPos, int newPos){ cursorPos = newPos;});
 
     QList<QPushButton*> buttons = this->findChildren<QPushButton*>();
     for (auto* button : buttons) {
         button->setFocusPolicy(Qt::NoFocus);
+    }
+
+    const QList<QPushButton*> padButtons = {
+        ui->btnPlus, ui->btnMinus, ui->btnMul, ui->btnDiv,
+        ui->btnSqrt, ui->btnFAC, ui->btnDUBFAC, ui->btnSUBFAC,
+        ui->btnSCOB1, ui->btnSCOB2, ui->btnBack
+    };
+    for (auto* button : padButtons) {
+        button->setProperty("class", QStringLiteral("Pad"));
+    }
+
+    const QList<QPushButton*> accentButtons = {
+        ui->btnMul, ui->btnDiv,
+        ui->btnFAC, ui->btnDUBFAC, ui->btnSUBFAC,
+        ui->btnSCOB1, ui->btnSCOB2
+    };
+    for (auto* button : accentButtons) {
+        button->setProperty("class", QStringLiteral("Pad PadAccent"));
     }
 }
 
@@ -109,12 +216,12 @@ void MainWindow::replace(int a){
 void MainWindow::showErrorHint(const QString &text, int time) {
     ui->statusbar->setStyleSheet(
         "QStatusBar {"
-        "   background-color: rgb(80, 0, 70);"
-        "   color: rgb(255, 100, 150);"
-        "   border-top: 1px solid rgb(234, 0, 94);"
-        "   font-weight: bold;"
-        "   font-size: 14px;"
-        "   padding: 5px 10px;"
+        "   background-color: #17171F;"
+        "   color: #EF4444;"
+        "   border-top: 1px solid #8B5CF6;"
+        "   font-weight: 600;"
+        "   font-size: 16px;"
+        "   padding: 6px 12px;"
         "}"
         );
 
@@ -124,12 +231,12 @@ void MainWindow::showErrorHint(const QString &text, int time) {
         // возвращаем обычный стиль через 3 секунды
         ui->statusbar->setStyleSheet(
             "QStatusBar {"
-            "   background-color: rgb(35, 35, 35);"
-            "   color: rgb(234, 0, 94);"
-            "   border-top: 1px solid rgb(80, 0, 70);"
-            "   font-size: 14px;"
-            "   font-weight: bold;"
-            "   padding: 5px 10px;"
+            "   background-color: #17171F;"
+            "   color: #A3A3B0;"
+            "   border-top: 1px solid #262636;"
+            "   font-size: 16px;"
+            "   font-weight: 500;"
+            "   padding: 6px 12px;"
             "}"
             );
         ui->statusbar->clearMessage();
@@ -240,10 +347,10 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             // Визуальный эффект нажатия
             btn->setDown(true);
             btn->setStyleSheet(
-                "background-color: rgb(200, 0, 80);"
-                "border: 1px solid rgb(170, 0, 70);"
-                "box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);"
-                "border-radius: 6px;"
+                "background-color: #13131A;"
+                "border: 1px solid #3B3B55;"
+                "border-radius: 16px;"
+                "color: #EAEAF0;"
                 );
             btn->setProperty("normalStyle", normalStyle);
 
@@ -266,10 +373,10 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             // Визуальный эффект нажатия
             btn->setDown(true);
             btn->setStyleSheet(
-                "background-color: rgb(200, 0, 80);"
-                "border: 1px solid rgb(170, 0, 70);"
-                "box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);"
-                "border-radius: 6px;"
+                "background-color: #13131A;"
+                "border: 1px solid #3B3B55;"
+                "border-radius: 16px;"
+                "color: #EAEAF0;"
                 );
             btn->setProperty("normalStyle", normalStyle);
 
@@ -278,7 +385,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
         }
 
         // === Разрешаем только стрелки и Home/End ===
-        if (obj == ui->lineEditExpr) {
+        if (obj == ui->EquationField) {
             switch (key) {
             case Qt::Key_Left:
             case Qt::Key_Right:
@@ -334,11 +441,11 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
 
 // --- Обновление интерфейса ---
 void MainWindow::updateUI() {
-    ui->label->setText(QString("LEVEL %1").arg(target));
-    ui->lineEditExpr->blockSignals(true);
-    ui->lineEditExpr->setText(expr);
-    ui->lineEditExpr->blockSignals(false);
-    ui->lineEditExpr->setCursorPosition(cursorPos);
+    ui->LevelTitle->setText(QString("LEVEL %1").arg(target));
+    ui->EquationField->blockSignals(true);
+    ui->EquationField->setText(expr);
+    ui->EquationField->blockSignals(false);
+    ui->EquationField->setCursorPosition(cursorPos);
 }
 
 // --- Добавление скобок ---
